@@ -18,3 +18,6 @@ While some of the status can be set proactively - ThriftBusiness is responsible 
 To update the order's status in the background, we make use of Firestore Cloud Functions which was triggered whenever an order's status change. The Cloud Functions will then schedule a task to update the status and enqueue it to Google Cloud Task's queue. For instance, whenever an order status is changed to `OO(ORDER_CONFIRMED)`, we schedule a task to update the status of order to `OOO(ORDER_AWAIT_PICKUP)` at the start of the collection time. Similarly, whenever a new `order` documents is created, we scheuled a task to change the order from `O(ORDER_PLACED)` to `OX(ORDER_CANCELLED)` after 30 minutes.
 
 To simplify architecture, we don't explicitly remove a task even when it's not necessary to perform a task: when a business confirmed an order after the task to automatically cancel the order has been scheduled. Instead, the Cloud Functions will perform a transaction on the Firestore's document and only perform the status change to `ORDER_CANCELLED` when the previous status is `ORDER_PLACED`. A Firestore's transaction is necessary to avoid a race condition.
+
+## TODO
+* Made use of Firebase Cloud Messaging to send notification to ThriftCustomer whenever an order has been confirmed/cancelled by business 
