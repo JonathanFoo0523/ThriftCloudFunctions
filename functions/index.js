@@ -9,15 +9,26 @@ const AUTO_CANCEL_ORDER_MINS = 30;
 
 exports.scheduleCancelOrder = functions
     .firestore.document("/orders/{orderId}")
-    .onCreate((snap, context) => {
+    .onCreate(async (snap, context) => {
       const orderId = context.params.orderId;
+      const itemRef =
+        admin.firestore().collection("items").doc(snap.data().itemId);
+      functions.logger.log("Getting item for", snap.data().itemId);
+      const item = (await itemRef.get()).data();
       const queue = functionsAdmin.getFunctions()
           .taskQueue("updateOrderStatus");
-      const scheduleDelaySeconds = 60 * AUTO_CANCEL_ORDER_MINS;
+
+      const retaurantConfirmDeadline =
+        new Date(Date.now() + 1000 * 60 * AUTO_CANCEL_ORDER_MINS);
+      const collectionEndTime = item.collection.to.toDate();
+      const autoCancelTime =
+        retaurantConfirmDeadline > collectionEndTime ?
+        collectionEndTime :
+        retaurantConfirmDeadline;
       functions.logger.log("Scheduling CANCEL_ORDER task for", orderId);
       return queue.enqueue(
           {task: "CANCEL_ORDER", orderId: orderId},
-          {scheduleDelaySeconds},
+          {scheduleTime: autoCancelTime},
       );
     });
 
