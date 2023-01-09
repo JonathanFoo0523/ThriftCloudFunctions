@@ -109,3 +109,82 @@ exports.updateOrderStatus = functions
     });
 
 
+exports.sendOrderNotification = functions
+    .firestore.document("/orders/{orderId}")
+    .onUpdate(async (snap, context) => {
+      const orderId = context.params.orderId;
+      const newData = snap.after.data();
+
+      const itemRef = admin.firestore().collection("items").doc(newData.itemId);
+      functions.logger.log("Getting item for", newData.itemId);
+      const item = (await itemRef.get()).data();
+
+      // eslint-disable-next-line max-len
+      const businessRef = admin.firestore().collection("business").doc(newData.businessId);
+      functions.logger.log("Getting business for", newData.businessId);
+      const business = (await businessRef.get()).data();
+
+      const collectionFrom = item.collection.from.toDate();
+      const collectionTo = item.collection.to.toDate();
+
+      const notification = {};
+      const apns = {payload: {aps: {contentAvailable: true, sound: "default"}}};
+      const token = newData.fcmToken;
+      // const data = {};
+
+      switch (newData.status) {
+        case "OO":
+          functions.logger.log("Sending Order Confirmed Notification", orderId);
+          notification.title = "Order Confirmed";
+          notification.body =
+            // eslint-disable-next-line max-len
+            `Your ${item.name} at ${business.name} has been confirmed. Collection starts at ${amPmTimeDescription(collectionFrom)}`;
+          // data.type = "ORDER_CONFIRMED";
+          break;
+        case "OX":
+          functions.logger.log("Sending Order Cancelled Notification", orderId);
+          notification.title = "Order Cancelled";
+          notification.body =
+            `Your ${item.name} at ${business.name} has been cancelled`;
+          // data.type = "ORDER_CANCELLED";
+          break;
+        case "OOO":
+          functions.logger.log("Sending Await Pickup Notification", orderId);
+          notification.title = "Order Ready For Collection";
+          notification.body =
+            // eslint-disable-next-line max-len
+            `Collect your ${item.name} at ${business.name} before ${amPmTimeDescription(collectionTo)}`;
+          break;
+        default:
+          functions.logger.log("Notification for state change not required");
+          return;
+      }
+      // data.collectFrom = collectionFrom;
+      // data.collectTo = collectionTo;
+
+      const message = {notification, apns, token};
+      const response = await admin.messaging().send(message);
+      functions.logger.log("Notification status:", response.results);
+      return;
+    });
+
+const amPmTimeDescription = (dateTime) => {
+  const amPm = dateTime.getHours() < 12 ? "AM" : "PM";
+
+  const hours = pad(
+    dateTime.getHours() < 13 ? dateTime.getHours() : dateTime.getHours() - 12,
+    2,
+  );
+
+  const mins = pad(dateTime.getMinutes(), 2);
+
+  return hours + ":" + mins + amPm;
+};
+
+const pad = (num, size) => {
+  num = num.toString();
+  while (num.length < size) {
+    num = "0" + num;
+  }
+  return num;
+};
