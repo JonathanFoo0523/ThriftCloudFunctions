@@ -181,9 +181,8 @@ exports.sendOrderPlacedMessage = functions
       functions.logger.log("Getting business for", snap.data().businessId);
       const business = (await businessRef.get()).data();
 
-      const messageBody = `New Order ${context.params.orderId}. 
-        Please CONFIRM/CANCEL the order for ${item.name} 
-        within ${AUTO_CANCEL_ORDER_MINS} minutes`;
+      // eslint-disable-next-line max-len
+      const messageBody = `New Order ${context.params.orderId}. Please CONFIRM/CANCEL the order for ${item.name} within ${AUTO_CANCEL_ORDER_MINS} minutes`;
 
       admin
           .firestore()
