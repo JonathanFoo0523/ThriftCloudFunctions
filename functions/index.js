@@ -6,6 +6,7 @@ const functionsAdmin = require("firebase-admin/functions");
 admin.initializeApp();
 
 const AUTO_CANCEL_ORDER_MINS = 30;
+const TIME_ZONE = "Asia/Singapore";
 
 exports.scheduleCancelOrder = functions
     .firestore.document("/orders/{orderId}")
@@ -168,15 +169,44 @@ exports.sendOrderNotification = functions
       return;
     });
 
+exports.sendOrderPlacedMessage = functions
+    .firestore.document("/orders/{orderId}")
+    .onCreate(async (snap, context) => {
+      const itemRef =
+        admin.firestore().collection("items").doc(snap.data().itemId);
+      const businessRef =
+        admin.firestore().collection("business").doc(snap.data().businessId);
+      functions.logger.log("Getting item for", snap.data().itemId);
+      const item = (await itemRef.get()).data();
+      functions.logger.log("Getting business for", snap.data().businessId);
+      const business = (await businessRef.get()).data();
+
+      const messageBody = `New Order ${context.params.orderId}. 
+        Please CONFIRM/CANCEL the order for ${item.name} 
+        within ${AUTO_CANCEL_ORDER_MINS} minutes`;
+
+      admin
+          .firestore()
+          .collection("messages")
+          .add({
+            to: business.contact.primary,
+            body: messageBody,
+          })
+          .then(() => console.log("Queued message for delivery!"));
+    });
+
 const amPmTimeDescription = (dateTime) => {
-  const amPm = dateTime.getHours() < 12 ? "AM" : "PM";
+  // eslint-disable-next-line max-len
+  const offsetedDate = new Date(dateTime.toLocaleString("en-us", {timeZone: TIME_ZONE}));
+  const amPm = offsetedDate.getHours() < 12 ? "AM" : "PM";
 
   const hours = pad(
-    dateTime.getHours() < 13 ? dateTime.getHours() : dateTime.getHours() - 12,
+    // eslint-disable-next-line max-len
+    offsetedDate.getHours() < 13 ? offsetedDate.getHours() : offsetedDate.getHours() - 12,
     2,
   );
 
-  const mins = pad(dateTime.getMinutes(), 2);
+  const mins = pad(offsetedDate.getMinutes(), 2);
 
   return hours + ":" + mins + amPm;
 };
